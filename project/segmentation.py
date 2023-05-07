@@ -24,7 +24,7 @@ class Segementation:
         self.hsv_RoI = {}
         self.RoI_list = []
         self.mask = np.zeros(SHAPE)
-        self.contours = None
+        self.contours = []
         self.pieces = []
         plt.rcParams["image.cmap"] = "gray"
 
@@ -48,13 +48,13 @@ class Segementation:
                 self.hsv_filled[key] = dil
             else:
                 self.hsv_filled[key] = np.zeros(SHAPE, dtype=bool)
-            print("Filled Squares", end="\r")
+            print("Filled Squares  ", end="\r")
 
     def _blur(self):
         self._fill_squares()
         for key, filled in self.hsv_filled.items():
             self.hsv_blur[key] = ndi.gaussian_filter(filled.astype("float32"), sigma=40)
-        print("Blured image    ", end="\r")
+        print("Blured image      ", end="\r")
 
     def _find_peaks(self):
         self._blur()
@@ -78,7 +78,7 @@ class Segementation:
                 self.RoI_list.extend(RoI)
             else:
                 self.hsv_RoI[key] = None
-        print("Found peaks    ", end="\r")
+        print("Found peaks      ", end="\r")
 
     def _create_mask(self):
         self._find_peaks()
@@ -92,7 +92,7 @@ class Segementation:
             ] = 1
 
         self.mask = (mask_frg + mask_bkg).astype("uint8")
-        print("Created mask    ", end="\r")
+        print("Created mask      ", end="\r")
 
     def _grabCut(self):
         self._create_mask()
@@ -115,16 +115,20 @@ class Segementation:
         mask = np.where((self.mask == 2) | (self.mask == 0), 0, 1).astype(bool)
         mask = skimage.morphology.remove_small_holes(mask, 120**2)
         self.mask = skimage.morphology.remove_small_objects(mask, 120**2)
-        print("Cleaned mask   ", end="\r")
+        print("Cleaned mask     ", end="\r")
 
     def _find_contours(self):
         self._clean_mask()
-        self.contours, _ = cv2.findContours(
+        contours, _ = cv2.findContours(
             image=(255 * self.mask).astype("uint8"),
             mode=cv2.RETR_TREE,
             method=cv2.CHAIN_APPROX_NONE,
         )
-        print("Found Contours   ", end="\r")
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if 120**2 < area < 130**2:
+                self.contours.append(contour)
+        print("Found Contours     ", end="\r")
 
     def find_pieces(self):
         self._find_contours()
