@@ -3,7 +3,7 @@ from PIL import Image
 import numpy as np
 
 
-def load_input_image(image_index, folder="train", path="data_project"):
+def load_input_image(image_index, folder="train2", path="data_project"):
     filename = "train_{}.png".format(str(image_index).zfill(2))
     im = Image.open(os.path.join(path, folder, filename)).convert("RGB")
     return np.array(im)

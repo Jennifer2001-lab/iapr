@@ -12,11 +12,11 @@ class Segementation:
     def __init__(self, img):
         self.img = img
 
-        hsv_img = skimage.color.rgb2hsv(self.img)
+        self.hsv_img = skimage.color.rgb2hsv(self.img)
         self.hsv_imgs = {
-            "Hue": hsv_img[:, :, 0],
-            "Saturation": hsv_img[:, :, 1],
-            "Value": hsv_img[:, :, 2],
+            "Hue": self.hsv_img[:, :, 0],
+            "Saturation": self.hsv_img[:, :, 1],
+            "Value": self.hsv_img[:, :, 2],
         }
         self.hsv_edges = {}
         self.hsv_filled = {}
@@ -100,12 +100,12 @@ class Segementation:
         foregroundModel = np.zeros((1, 65), np.float64)
 
         cv2.grabCut(
-            self.img,
+            (255 * self.hsv_img).astype("uint8"),
             self.mask,
             rect=None,
             bgdModel=backgroundModel,
             fgdModel=foregroundModel,
-            iterCount=5,
+            iterCount=1,
             mode=cv2.GC_INIT_WITH_MASK,
         )
         print("GrabCut finished", end="\r")
@@ -159,6 +159,17 @@ class Segementation:
         print("Pieces detected :)", end="\r")
 
     # Visualization functions
+    def plot_hsv(self):
+        fig, axs = plt.subplots(1, 3, figsize=(15, 6))
+        for (key, img), ax in zip(self.hsv_imgs.items(), axs.ravel()):
+            ax.imshow(img)
+            ax.set_title(key)
+            ax.set_xticks([])
+            ax.set_yticks([])
+
+        fig.suptitle("HSV Images", fontsize=20)
+        plt.tight_layout()
+        plt.show()
 
     def plot_edges(self):
         if not self.hsv_edges:
@@ -262,11 +273,12 @@ class Segementation:
 
         num_pieces = len(self.pieces)
 
-        fig, axs = plt.subplots(8, num_pieces // 8 + 1)
-        for piece, ax in zip(self.pieces, axs.ravel()):
+        fig, axs = plt.subplots(6, int(np.ceil(num_pieces / 6)))
+        for i, (piece, ax) in enumerate(zip(self.pieces, axs.ravel())):
             ax.imshow(piece)
             ax.set_xticks([])
             ax.set_yticks([])
+            ax.set_xlabel(i, fontsize=8)
         for ax in axs.ravel()[num_pieces:]:
             ax.axis("off")
         fig.suptitle(f"{num_pieces} Detected Pieces")
