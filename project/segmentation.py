@@ -44,7 +44,7 @@ class Segementation:
             )
             dil = skimage.morphology.dilation(dil, footprint=skimage.morphology.disk(5))
             dil = skimage.morphology.remove_small_holes(dil, PIECE_WIDTH**2)
-            if (np.count_nonzero(dil) / dil.size) < 0.3:
+            if (np.count_nonzero(dil) / dil.size) < 0.25:
                 self.hsv_filled[key] = dil
             else:
                 self.hsv_filled[key] = np.zeros(SHAPE, dtype=bool)
@@ -77,7 +77,7 @@ class Segementation:
                 self.hsv_RoI[key] = RoI
                 self.RoI_list.extend(RoI)
             else:
-                self.hsv_RoI[key] = None
+                self.hsv_RoI[key] = np.array([])
         print("Found peaks      ", end="\r")
 
     def _create_mask(self):
@@ -100,12 +100,12 @@ class Segementation:
         foregroundModel = np.zeros((1, 65), np.float64)
 
         cv2.grabCut(
-            (255 * self.hsv_img).astype("uint8"),
+            self.img,  # (255 * self.hsv_img).astype("uint8"),
             self.mask,
             rect=None,
             bgdModel=backgroundModel,
             fgdModel=foregroundModel,
-            iterCount=1,
+            iterCount=2,
             mode=cv2.GC_INIT_WITH_MASK,
         )
         print("GrabCut finished", end="\r")
@@ -172,8 +172,6 @@ class Segementation:
         plt.show()
 
     def plot_edges(self):
-        if not self.hsv_edges:
-            self._find_edges()
         fig, axs = plt.subplots(1, 3, figsize=(15, 6))
         for (key, edges), ax in zip(self.hsv_edges.items(), axs.ravel()):
             ax.imshow(~edges)
@@ -186,8 +184,6 @@ class Segementation:
         plt.show()
 
     def plot_filled_squares(self):
-        if not self.hsv_filled:
-            self._fill_squares()
         fig, axs = plt.subplots(1, 3, figsize=(15, 6))
         for (key, dil), ax in zip(self.hsv_filled.items(), axs.ravel()):
             ax.imshow(~dil)
@@ -201,8 +197,6 @@ class Segementation:
         plt.show()
 
     def plot_blur(self):
-        if not self.hsv_blur:
-            self._blur()
         fig, axs = plt.subplots(1, 3, figsize=(15, 6))
         for (key, blur), ax in zip(self.hsv_blur.items(), axs.ravel()):
             ax.imshow(1 - blur)
@@ -216,8 +210,6 @@ class Segementation:
         plt.show()
 
     def plot_RoI(self):
-        if not self.hsv_RoI:
-            self._find_peaks()
         fig, axs = plt.subplots(1, 3, figsize=(15, 6))
         for (key, peaks), ax in zip(self.hsv_RoI.items(), axs.ravel()):
             ax.imshow(self.img, cmap="gray", alpha=0.5)
@@ -231,8 +223,6 @@ class Segementation:
         plt.show()
 
     def plot_mask(self):
-        if not self.mask.any():
-            self._clean_mask()
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
 
         ax1.imshow(self.mask)
@@ -268,9 +258,6 @@ class Segementation:
         plt.show()
 
     def plot_pieces(self):
-        if not self.pieces:
-            self.find_pieces()
-
         num_pieces = len(self.pieces)
 
         fig, axs = plt.subplots(6, int(np.ceil(num_pieces / 6)))
