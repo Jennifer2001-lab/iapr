@@ -122,12 +122,18 @@ class Segementation:
         contours, _ = cv2.findContours(
             image=(255 * self.mask).astype("uint8"),
             mode=cv2.RETR_TREE,
-            method=cv2.CHAIN_APPROX_NONE,
+            method=cv2.CHAIN_APPROX_SIMPLE,
         )
         for contour in contours:
-            area = cv2.contourArea(contour)
-            if 120**2 < area < 130**2:
-                self.contours.append(contour)
+            cnt = cv2.approxPolyDP(contour, cv2.arcLength(contour, True) / 8, True)
+            perimeter = cv2.arcLength(cnt, True)
+            area = cv2.contourArea(cnt)
+            if (
+                122**2 < area < 130**2
+                and 122 < perimeter / 4 < 130
+                and 0.97 < area / (perimeter / 4) ** 2 < 1.03
+            ):
+                self.contours.append(cnt)
         print("Found Contours     ", end="\r")
 
     def find_pieces(self):
@@ -155,6 +161,7 @@ class Segementation:
                 round(h - PIECE_WIDTH) // 2 : -round(h - PIECE_WIDTH) // 2,
                 round(w - PIECE_WIDTH) // 2 : -round(w - PIECE_WIDTH) // 2,
             ]
+            # piece_filtered = cv2.medianBlur(result, ksize=3)
             self.pieces.append(result)
         print("Pieces detected :)", end="\r")
 
@@ -242,15 +249,11 @@ class Segementation:
     def plot_contours(
         self,
     ):
-        if not self.contours:
-            self._find_contours()
         fig, ax = plt.subplots()
         ax.imshow(self.img, alpha=0.5)
         for contour in self.contours:
-            rect = cv2.minAreaRect(contour)
-            box = cv2.boxPoints(rect)
-            box = np.vstack((box, box[0]))
-            ax.plot(box[:, 0], box[:, 1], "-.k")
+            contour = np.vstack((contour, contour[0][np.newaxis, :, :]))
+            ax.plot(contour[:, :, 0], contour[:, :, 1], "-.k")
             ax.set_xticks([])
             ax.set_yticks([])
         fig.suptitle("Contours")
