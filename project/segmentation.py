@@ -129,8 +129,8 @@ class Segementation:
             perimeter = cv2.arcLength(cnt, True)
             area = cv2.contourArea(cnt)
             if (
-                122**2 < area < 130**2
-                and 122 < perimeter / 4 < 130
+                120**2 < area < 130**2
+                and 120 < perimeter / 4 < 130
                 and 0.97 < area / (perimeter / 4) ** 2 < 1.03
             ):
                 self.contours.append(cnt)
@@ -161,7 +161,6 @@ class Segementation:
                 round(h - PIECE_WIDTH) // 2 : -round(h - PIECE_WIDTH) // 2,
                 round(w - PIECE_WIDTH) // 2 : -round(w - PIECE_WIDTH) // 2,
             ]
-            # piece_filtered = cv2.medianBlur(result, ksize=3)
             self.pieces.append(result)
         print("Pieces detected :)", end="\r")
 
