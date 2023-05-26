@@ -8,7 +8,7 @@ SHAPE = (2000, 2000)
 PIECE_WIDTH = 128
 
 
-class Segementation:
+class Segmentation:
     def __init__(self, img):
         self.img = img
 
