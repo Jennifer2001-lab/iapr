@@ -5,6 +5,10 @@ from sklearn.decomposition import KernelPCA
 from sklearn.preprocessing import normalize
 from scipy.stats import kurtosis, skew
 
+def get_cut_image(img):
+    return img[2:-2,2:-2,:]
+def get_borders_image(img):
+    return (img[0,:,:], img[0,::-1,:], img[-1,:,:], img[-1,::-1,:], img[:,0,:], img[::-1,0,:], img[:,-1,:], img[::-1,-1,:])
 
 class FeaturesExtraction:
     def __init__(self, pieces):
@@ -43,11 +47,43 @@ class FeaturesExtraction:
 
         self.distances = np.array(distances)
 
+    def find_distances_borders(self):
+
+        if len(self.pieces)<= 1:
+            self.distances_borders = np.array(len(self.pieces))
+        cut_pieces = [get_cut_image(piece) for piece in self.pieces]
+        dists = []  # Initialize an empty list to store distances
+        
+        # Loop over each cut piece
+        for i, p1 in enumerate(cut_pieces):
+            borders_p1 = get_borders_image(p1)
+            dists_p1 = []  # Initialize an empty list to store distances for p1
+            
+            # Loop over each cut piece again to compare with p1
+            for j, p2 in enumerate(cut_pieces):
+                if i != j:  # Exclude the same piece comparison
+                    borders_p2 = get_borders_image(p2)
+                    dmin = np.inf  # Initialize the minimum distance to infinity
+                    
+                    # Loop over each border of p2
+                    for b in borders_p2:
+                        # Compute the squared Euclidean distances and find the minimum
+                        d = np.min(np.sum((b - borders_p1) ** 2, axis=1))
+                        dmin = min(dmin, d)
+                    
+                    if dmin != 0:  # Exclude zero distances
+                        dists_p1.append(dmin)
+            
+            dists.append(np.sort(dists_p1)[0])
+        
+        self.distances_borders = np.array(dists).reshape(-1, 1)
+
     def find_features_(self):
         features = np.array([find_features_(piece) for piece in self.pieces])
         self.find_distances_()
         self.find_correlation_()
-        features = np.hstack([features, self.distances, self.correlations])
+        self.find_distances_borders()
+        features = np.hstack([features, self.distances, self.correlations, self.distances_borders])
         self.features = (features - np.mean(features, axis=0)) / np.maximum(
             1e-10, np.std(features, axis=0)
         )
