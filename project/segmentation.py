@@ -18,107 +18,115 @@ class Segmentation:
             "Saturation": self.hsv_img[:, :, 1],
             "Value": self.hsv_img[:, :, 2],
         }
-        self.hsv_edges = {}
-        self.hsv_filled = {}
-        self.hsv_blur = {}
-        self.hsv_RoI = {}
-        self.RoI_list = []
+        self.edges = {}
+        self.closed_edges = {}
+        self.blurred_edges = {}
+        self.centers_pieces = {}
+        self.centers_list = []
         self.mask = np.zeros(SHAPE)
         self.contours = []
         self.pieces = []
         plt.rcParams["image.cmap"] = "gray"
+
+    def segment(self):
+        self._find_edges()
+        self._close_edges()
+        self._blur()
+        self._find_centers()
+        self._create_mask()
+        self._grabCut()
+        self._clean_mask()
+        self._find_contours()
+        self._find_pieces()
 
     def _find_edges(self):
         for key, gray_img in self.hsv_imgs.items():
             median_img = cv2.medianBlur((255 * gray_img).astype("uint8"), ksize=25)
             edges_sobel = skimage.filters.sobel(median_img)
             edges = cv2.Canny((edges_sobel * 255).astype("uint8"), 10, 100)
-            self.hsv_edges[key] = edges
+            self.edges[key] = edges
             print("Found edges         ", end="\r")
 
-    def _fill_squares(self):
-        self._find_edges()
-        for key, edges in self.hsv_edges.items():
+    def _close_edges(self):
+        for key, edges in self.edges.items():
             dil = skimage.morphology.remove_small_holes(
                 edges.astype(bool), PIECE_WIDTH**2
             )
             dil = skimage.morphology.dilation(dil, footprint=skimage.morphology.disk(5))
             dil = skimage.morphology.remove_small_holes(dil, PIECE_WIDTH**2)
             if (np.count_nonzero(dil) / dil.size) < 0.25:
-                self.hsv_filled[key] = dil
+                self.closed_edges[key] = dil
             else:
-                self.hsv_filled[key] = np.zeros(SHAPE, dtype=bool)
+                self.closed_edges[key] = np.zeros(SHAPE, dtype=bool)
             print("Filled Squares       ", end="\r")
 
     def _blur(self):
-        self._fill_squares()
-        for key, filled in self.hsv_filled.items():
-            self.hsv_blur[key] = ndi.gaussian_filter(filled.astype("float32"), sigma=40)
+        for key, filled in self.closed_edges.items():
+            self.blurred_edges[key] = ndi.gaussian_filter(
+                filled.astype("float32"), sigma=40
+            )
         print("Blured image          ", end="\r")
 
-    def _find_peaks(self):
-        self._blur()
-        for key, blur_img in self.hsv_blur.items():
+    def _find_centers(self):
+        for key, blur_img in self.blurred_edges.items():
             centered = blur_img[1:-1, 1:-1]
             right = blur_img[1:-1, 2:]
             left = blur_img[1:-1, :-2]
             top = blur_img[:-2, 1:-1]
             bottom = blur_img[2:, 1:-1]
-            img_peaks = (
+            local_max = (
                 (centered > right)
                 & (centered > left)
                 & (centered > bottom)
                 & (centered > top)
                 & (centered > 0.6)
             )
-            indx = np.where(img_peaks == 1)
-            RoI = np.transpose(np.vstack((indx[0], indx[1])))
-            if len(RoI) < 40:
-                self.hsv_RoI[key] = RoI
-                self.RoI_list.extend(RoI)
+            indx = np.where(local_max == 1)
+            centers = np.transpose(np.vstack((indx[0], indx[1])))
+            if len(centers) < 40:
+                self.centers_pieces[key] = centers
+                self.centers_list.extend(centers)
             else:
-                self.hsv_RoI[key] = np.array([])
+                self.centers_pieces[key] = np.array([])
         print("Found peaks          ", end="\r")
 
     def _create_mask(self):
-        self._find_peaks()
         mask_bkg = 2 * np.ones(SHAPE)
         mask_frg = np.zeros(SHAPE)
         indices = np.indices(SHAPE)
 
-        for RoI in self.RoI_list:
+        for centers in self.centers_list:
             mask_frg[
-                np.sqrt((indices[0] - RoI[0]) ** 2 + (indices[1] - RoI[1]) ** 2) < 80
+                np.sqrt((indices[0] - centers[0]) ** 2 + (indices[1] - centers[1]) ** 2)
+                < 80
             ] = 1
 
         self.mask = (mask_frg + mask_bkg).astype("uint8")
         print("Created mask          ", end="\r")
 
     def _grabCut(self):
-        self._create_mask()
         backgroundModel = np.zeros((1, 65), np.float64)
         foregroundModel = np.zeros((1, 65), np.float64)
 
         cv2.grabCut(
-            self.img,  # (255 * self.hsv_img).astype("uint8"),
+            self.img,
             self.mask,
             rect=None,
             bgdModel=backgroundModel,
             fgdModel=foregroundModel,
-            iterCount=2,
+            iterCount=2,  # Can be tuned
             mode=cv2.GC_INIT_WITH_MASK,
         )
         print("GrabCut finished    ", end="\r")
 
     def _clean_mask(self):
-        self._grabCut()
+        # Remove noise
         mask = np.where((self.mask == 2) | (self.mask == 0), 0, 1).astype(bool)
         mask = skimage.morphology.remove_small_holes(mask, 120**2)
         self.mask = skimage.morphology.remove_small_objects(mask, 120**2)
         print("Cleaned mask        ", end="\r")
 
     def _find_contours(self):
-        self._clean_mask()
         contours, _ = cv2.findContours(
             image=(255 * self.mask).astype("uint8"),
             mode=cv2.RETR_TREE,
@@ -132,16 +140,17 @@ class Segmentation:
                 120**2 < area < 130**2
                 and 120 < perimeter / 4 < 130
                 and 0.97 < area / (perimeter / 4) ** 2 < 1.03
-            ):
+            ):  # Check if contour is valid
                 self.contours.append(cnt)
+        mask = np.zeros(self.mask.shape)
+        cv2.drawContours(mask, self.contours, -1, 255, cv2.FILLED)
+        self.mask = (mask / 255).astype(bool)
         print("Found Contours      ", end="\r")
 
-    def find_pieces(self):
-        self._find_contours()
+    def _find_pieces(self):
         for contour in self.contours:
             rect = cv2.minAreaRect(contour)
             ((x, y), _, angle) = rect
-
             d = np.min(
                 [
                     PIECE_WIDTH,
@@ -151,20 +160,19 @@ class Segmentation:
                     SHAPE[1] - round(x),
                 ]
             )
-
             img_crop = self.img[
                 round(y) - d : round(y) + d, round(x) - d : round(x) + d
             ]
             img_rot = ndi.rotate(img_crop, angle)
             (h, w) = img_rot.shape[:-1]
-            result = img_rot[
+            piece = img_rot[
                 round(h - PIECE_WIDTH) // 2 : -round(h - PIECE_WIDTH) // 2,
                 round(w - PIECE_WIDTH) // 2 : -round(w - PIECE_WIDTH) // 2,
             ]
-            self.pieces.append(result)
+            self.pieces.append(piece)
         print("Pieces detected :) ", end="\r")
 
-    # Visualization functions
+    # PLOTING FUNCTIONS
     def plot_hsv(self):
         fig, axs = plt.subplots(1, 3, figsize=(15, 6))
         for (key, img), ax in zip(self.hsv_imgs.items(), axs.ravel()):
@@ -179,7 +187,7 @@ class Segmentation:
 
     def plot_edges(self):
         fig, axs = plt.subplots(1, 3, figsize=(15, 6))
-        for (key, edges), ax in zip(self.hsv_edges.items(), axs.ravel()):
+        for (key, edges), ax in zip(self.edges.items(), axs.ravel()):
             ax.imshow(~edges)
             ax.set_title(key)
             ax.set_xticks([])
@@ -189,9 +197,9 @@ class Segmentation:
         plt.tight_layout()
         plt.show()
 
-    def plot_filled_squares(self):
+    def plot_closed_edges(self):
         fig, axs = plt.subplots(1, 3, figsize=(15, 6))
-        for (key, dil), ax in zip(self.hsv_filled.items(), axs.ravel()):
+        for (key, dil), ax in zip(self.closed_edges.items(), axs.ravel()):
             ax.imshow(~dil)
             ax.set_title(key)
             ax.set_xticks([])
@@ -204,7 +212,7 @@ class Segmentation:
 
     def plot_blur(self):
         fig, axs = plt.subplots(1, 3, figsize=(15, 6))
-        for (key, blur), ax in zip(self.hsv_blur.items(), axs.ravel()):
+        for (key, blur), ax in zip(self.blurred_edges.items(), axs.ravel()):
             ax.imshow(1 - blur)
             ax.set_title(key)
             ax.set_xticks([])
@@ -215,9 +223,9 @@ class Segmentation:
         plt.tight_layout()
         plt.show()
 
-    def plot_RoI(self):
+    def plot_centers(self):
         fig, axs = plt.subplots(1, 3, figsize=(15, 6))
-        for (key, peaks), ax in zip(self.hsv_RoI.items(), axs.ravel()):
+        for (key, peaks), ax in zip(self.centers_pieces.items(), axs.ravel()):
             ax.imshow(self.img, cmap="gray", alpha=0.5)
             ax.set_title(key)
             if peaks.any():
@@ -237,7 +245,7 @@ class Segmentation:
 
         image_foreground = self.img * self.mask[:, :, np.newaxis]
         ax2.imshow(image_foreground)
-        ax2.imshow(self.img, alpha=0.25)
+        ax2.imshow(self.img, alpha=0.5, interpolation="nearest")
         ax2.set_xticks([])
         ax2.set_yticks([])
 
