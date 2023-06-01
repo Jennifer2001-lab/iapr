@@ -117,13 +117,14 @@ class Features:
         self.features_PCA = pca.fit_transform(self.features)
 
     def plot_features(self):
-        fig = plt.figure()
         if self.features_PCA.shape[1] == 3:  # 3D plot
+            fig = plt.figure(figsize=(10, 10))
             for i, o in enumerate(ORIENTATION):
                 ax = fig.add_subplot(2, 2, i + 1, projection="3d")
                 ax.scatter(*self.features_PCA.T, c=COLORS[0], marker="x")
                 ax.view_init(elev=o[0], azim=o[1])
         else:  # 2D plot
+            fig = plt.figure(figsize=(5, 5))
             ax = fig.add_subplot(1, 1, 1)
             ax.scatter(*self.features_PCA.T, c=COLORS[0], marker="x")
         fig.suptitle("PCA Features before classification")

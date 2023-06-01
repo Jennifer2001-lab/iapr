@@ -59,11 +59,13 @@ class Classification:
                     if len(cluster_samples) not in NUM_PIECES_INVERSE:
                         # Look for outliers in cluster
                         num_outliers = count_outliers(cluster_size)
-                        centroid = gm.means_[label]
-                        distances = np.sqrt(
-                            np.sum((cluster_samples - centroid) ** 2, axis=1)
-                        )
-                        outliers_index = np.argsort(distances)[-num_outliers:]
+                        # centroid = gm.means_[label]
+                        # distances = np.sqrt(
+                        #     np.sum((cluster_samples - centroid) ** 2, axis=1)
+                        # )
+                        # outliers_index = np.argsort(distances)[-num_outliers:]
+                        proba = gm.score_samples(cluster_samples)
+                        outliers_index = np.argsort(proba)[:num_outliers]
                         new_labels = label * np.ones(len(cluster_samples))
                         new_labels[outliers_index] = -1
                         labels[labels == label] = new_labels
@@ -209,8 +211,8 @@ class Classification:
         self.labels = best_labeling
 
     def plot_classification(self):
-        fig = plt.figure()
         if self.features_PCA.shape[1] == 3:  # 3D plot
+            fig = plt.figure(figsize=(10, 10))
             for i, o in enumerate(ORIENTATION):
                 ax = fig.add_subplot(2, 2, i + 1, projection="3d")
                 for label in np.unique(self.labels):
@@ -223,6 +225,7 @@ class Classification:
                     ax.view_init(elev=o[0], azim=o[1])
                 ax.legend()
         else:  # 2D plot
+            fig = plt.figure(figsize=(5, 5))
             ax = fig.add_subplot(1, 1, 1)
             for label in np.unique(self.labels):
                 ax.scatter(
