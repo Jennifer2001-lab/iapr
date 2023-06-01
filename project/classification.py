@@ -211,6 +211,9 @@ class Classification:
         self.labels = best_labeling
 
     def plot_classification(self):
+        if self.features_PCA.shape[1] > 3:
+            print('Cannot plot when more than 3 dimensions.')
+            return
         if self.features_PCA.shape[1] == 3:  # 3D plot
             fig = plt.figure(figsize=(10, 10))
             for i, o in enumerate(ORIENTATION):

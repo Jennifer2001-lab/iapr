@@ -92,9 +92,8 @@ class Features:
                         d = np.min(np.sum((b - borders_p1) ** 2, axis=1))
                         dmin = min(dmin, d)
 
-                    if dmin != 0:  # Exclude zero distances
-                        dists_p1.append(dmin)
-            dists.append(np.sort(dists_p1)[0])
+                    dists_p1.append(dmin)
+            dists.append(np.mean(dists_p1))
         self.distances_borders = np.array(dists).reshape(-1, 1)
 
     def find_features(self):
@@ -115,15 +114,19 @@ class Features:
         self.find_features()
         pca = KernelPCA(n_components=self.dim_reduction, kernel="rbf")
         self.features_PCA = pca.fit_transform(self.features)
+            
 
     def plot_features(self):
+        if self.features_PCA.shape[1] > 3:
+            print('Cannot plot when more than 3 dimensions.')
+            return
         if self.features_PCA.shape[1] == 3:  # 3D plot
             fig = plt.figure(figsize=(10, 10))
             for i, o in enumerate(ORIENTATION):
                 ax = fig.add_subplot(2, 2, i + 1, projection="3d")
                 ax.scatter(*self.features_PCA.T, c=COLORS[0], marker="x")
                 ax.view_init(elev=o[0], azim=o[1])
-        else:  # 2D plot
+        elif self.features_PCA.shape[1] == 2:  # 2D plot
             fig = plt.figure(figsize=(5, 5))
             ax = fig.add_subplot(1, 1, 1)
             ax.scatter(*self.features_PCA.T, c=COLORS[0], marker="x")
